@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>MSE autoplay</title>
+    <style>
+      video { border: solid grey 2px; }
+      #log {
+        overflow: scroll;
+        border: solid grey 2px;
+        height: 500px;
+      }
+    </style>    
+  </head>
+  <body>
+    <video id="v" controls></video>
+    <div id="log" style="font-size:small;"></div>
+    <script>
+
+      var networkState = {
+        0: "NETWORK_EMPTY",
+        1: "NETOWRK_IDLE",
+        2: "NETWORK_LOADING",
+        3: "NETWORK_NO_SOURCE"
+      };
+
+      var readyState = {
+        0: "HAVE_NOTHING",
+        1: "HAVE_METADATA",
+        2: "HAVE_CURRENT_DATA",
+        3: "HAVE_FUTURE_DATA",
+        4: "HAVE_ENOUGH_DATA"
+      };
+
+      function log(msg) {
+        var l = document.getElementById("log");
+        var div = document.createElement("div");
+        div.appendChild(document.createTextNode("" + (new Date()).getTime() + ": "));
+        div.appendChild(document.createTextNode(msg));
+        div.appendChild(document.createElement("br"));
+        l.appendChild(div);
+      }
+
+
+      // function fetch(url, fetched_callback) {
+      //   var xhr = new XMLHttpRequest();
+      //   xhr.open("GET", url, true);
+      //   xhr.responseType = "arraybuffer";
+
+      //   var loaded = function (event) {
+      //     console.log("loaded status=" + xhr.status + " xhr.response" + xhr.response);
+      //     if (xhr.status == 200 || xhr.status == 206) {
+      //       fetched_callback(xhr.response);
+      //     } else {
+      //       ok(false, "Fetch failed headers=" + xhr.getAllResponseHeaders());
+      //     }
+      //   };
+
+      //   xhr.addEventListener("load", loaded, false);
+      //   xhr.send();
+      // }
+  
+
+
+      // Generated with:
+      //  mp4box -dash 10000 -rap -segment-name bruce -subsegs-per-sidx 5 bruce_vs_ironman.mp4
+      //  http://gpac.wp.mines-telecom.fr/mp4box/dash/
+      var segments = [
+        "bruceinit.mp4",
+        "bruce1.m4s",
+        "bruce2.m4s",
+        "bruce3.m4s",
+        "bruce4.m4s",
+        "bruce5.m4s",
+        "bruce6.m4s",
+        "bruce7.m4s",
+      ];
+      var segmentIndex = 0;
+
+      var video = document.getElementById("v");
+      var ms = new MediaSource();
+      var vs;
+      var mediaobj;
+
+      async function getNextSegment() {
+        try {
+          if (segmentIndex == segments.length) {
+            log("fetched all segments.");
+            vs.removeEventListener("update", getNextSegment, false);
+          } else {
+            log("Fetching " + segments[segmentIndex] + " index=" + segmentIndex);
+            let url = segments[segmentIndex++];
+            let response = await fetch(url);
+            data = await response.arrayBuffer();
+            log("Appending " + url);
+            appendSegment(data);
+          }        
+        } catch (e) {
+          log("Exception Fetching: " + e.message);
+        }
+      }
+
+      function appendSegment(buf) {
+        try {
+          vs.appendBuffer(new Uint8Array(buf));
+        } catch (e) {
+          console.log("caught : " +e);
+        }
+        //getNextSegment();
+      }
+      
+      ms.addEventListener("sourceopen", function(e) {
+        mediaobj = video.mozSrcObject;
+        vs = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+        vs.addEventListener("update", getNextSegment, false);
+        getNextSegment();
+      }, false);
+
+      video.src = URL.createObjectURL(ms);
+
+      [
+        "abort",
+        "canplay",
+        "canplaythrough",
+        "durationchange",
+        "emptied",
+        "ended",
+        "loadeddata",
+        "loadedmetadata",
+        "loadstart",
+        "pause",
+        "play",
+        "playing",
+        "progress",
+        "resize",
+        "seeked",
+        "seeking",
+        "stalled",
+        "suspend",
+        "timeupdate",
+        "volumechange",
+        "waiting",
+      ].forEach(
+        (eventName) => {
+          video.addEventListener(eventName, (event) => { log(event.type); }, false); 
+        });
+
+
+      video._prevReadyState = -1;
+      video._prevNetworkState = -1;
+      video._prevRange = [-1,0];
+      video._paused = true;
+      video.volume = 0.1;
+      setInterval(
+        function() {
+          if (video.readyState != video._prevReadyState) {
+            video._prevReadyState = video.readyState;
+            log("readyState: " + readyState[video.readyState]);
+          }
+          if (video.networkState != video._networkState) {
+            video._networkState = video.networkState;
+            log("networkState: " + networkState[video.networkState]);
+          }
+          if (video._paused != video.paused) {
+            log("paused: " + video.paused);
+            video._paused = video.paused;
+          }
+        }, 100);
+
+      log("Calling play at loadstart");
+      video.play().then((e)=> {
+        log("Play at load start promise resolved.");
+      }, (e) => {
+        log("Play at load start promise rejected; " + e.message);
+      });
+
+
+    </script>
+  </body>
+</html>
