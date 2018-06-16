@@ -11,7 +11,7 @@
       }
     </style>    
   </head>
-  <body>
+  <body onload="load();">
     <video id="v" controls></video>
     <div id="log" style="font-size:small;"></div>
     <script>
@@ -41,138 +41,174 @@
       }
 
 
-      // function fetch(url, fetched_callback) {
-      //   var xhr = new XMLHttpRequest();
-      //   xhr.open("GET", url, true);
-      //   xhr.responseType = "arraybuffer";
-
-      //   var loaded = function (event) {
-      //     console.log("loaded status=" + xhr.status + " xhr.response" + xhr.response);
-      //     if (xhr.status == 200 || xhr.status == 206) {
-      //       fetched_callback(xhr.response);
-      //     } else {
-      //       ok(false, "Fetch failed headers=" + xhr.getAllResponseHeaders());
-      //     }
-      //   };
-
-      //   xhr.addEventListener("load", loaded, false);
-      //   xhr.send();
-      // }
-  
-
-
-      // Generated with:
-      //  mp4box -dash 10000 -rap -segment-name bruce -subsegs-per-sidx 5 bruce_vs_ironman.mp4
-      //  http://gpac.wp.mines-telecom.fr/mp4box/dash/
-      var segments = [
-        "bruceinit.mp4",
-        "bruce1.m4s",
-        "bruce2.m4s",
-        "bruce3.m4s",
-        "bruce4.m4s",
-        "bruce5.m4s",
-        "bruce6.m4s",
-        "bruce7.m4s",
-      ];
-      var segmentIndex = 0;
-
-      var video = document.getElementById("v");
-      var ms = new MediaSource();
-      var vs;
-      var mediaobj;
-
-      async function getNextSegment() {
-        try {
-          if (segmentIndex == segments.length) {
-            log("fetched all segments.");
-            vs.removeEventListener("update", getNextSegment, false);
-          } else {
-            log("Fetching " + segments[segmentIndex] + " index=" + segmentIndex);
-            let url = segments[segmentIndex++];
-            let response = await fetch(url);
-            data = await response.arrayBuffer();
-            log("Appending " + url);
-            appendSegment(data);
-          }        
-        } catch (e) {
-          log("Exception Fetching: " + e.message);
-        }
+      function once(obj, eventName, handler) {
+        let fn = (e) => {
+          obj.removeEventListener(eventName, fn, false);
+          handler(e);
+        };
+        obj.addEventListener(eventName, fn, false);
       }
 
-      function appendSegment(buf) {
-        try {
-          vs.appendBuffer(new Uint8Array(buf));
-        } catch (e) {
-          console.log("caught : " +e);
-        }
-        //getNextSegment();
+      function waitFor(obj, eventName) {
+        return new Promise((resolve, reject) => {
+          once(obj, eventName, resolve);
+        });
       }
-      
-      ms.addEventListener("sourceopen", function(e) {
-        mediaobj = video.mozSrcObject;
-        vs = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
-        vs.addEventListener("update", getNextSegment, false);
-        getNextSegment();
-      }, false);
 
-      video.src = URL.createObjectURL(ms);
 
-      [
-        "abort",
-        "canplay",
-        "canplaythrough",
-        "durationchange",
-        "emptied",
-        "ended",
-        "loadeddata",
-        "loadedmetadata",
-        "loadstart",
-        "pause",
-        "play",
-        "playing",
-        "progress",
-        "resize",
-        "seeked",
-        "seeking",
-        "stalled",
-        "suspend",
-        "timeupdate",
-        "volumechange",
-        "waiting",
-      ].forEach(
-        (eventName) => {
-          video.addEventListener(eventName, (event) => { log(event.type); }, false); 
+      async function load() {
+        log("load");
+
+        await stupid();
+        loadMSE();
+      }
+
+
+      async function stupid() {
+        let video = document.getElementById("v");
+        video.src = "data:video/mp4;base64,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";
+        video.volume = 1.0;
+        video.pause();
+        video.pause();
+        // log("wait for emptied");
+
+        // document.body.append
+
+        await waitFor(video, "loadedmetadata");
+        log("emptied got");
+
+        video.pause();
+        video.muted = true;
+        video.pause();
+        video.muted = false;
+        video.volume = 1.0;
+      }
+
+      function loadMSE() {
+
+        log("loadMSE");
+
+        // Generated with:
+        //  mp4box -dash 10000 -rap -segment-name bruce -subsegs-per-sidx 5 bruce_vs_ironman.mp4
+        //  http://gpac.wp.mines-telecom.fr/mp4box/dash/
+        var segments = [
+          "bruceinit.mp4",
+          "bruce1.m4s",
+          "bruce2.m4s",
+          "bruce3.m4s",
+          "bruce4.m4s",
+          "bruce5.m4s",
+          "bruce6.m4s",
+          "bruce7.m4s",
+        ];
+        var segmentIndex = 0;
+
+        var video = document.getElementById("v");
+        var ms = new MediaSource();
+        var vs;
+        var mediaobj;
+
+        async function getNextSegment() {
+          try {
+            if (segmentIndex == segments.length) {
+              log("fetched all segments.");
+              vs.removeEventListener("update", getNextSegment, false);
+            } else {
+              log("Fetching " + segments[segmentIndex] + " index=" + segmentIndex);
+              let url = segments[segmentIndex++];
+              let response = await fetch(url);
+              data = await response.arrayBuffer();
+              log("Appending " + url);
+              appendSegment(data);
+            }        
+          } catch (e) {
+            log("Exception fetching: " + e.message);
+          }
+        }
+
+        function appendSegment(buf) {
+          try {
+            vs.appendBuffer(new Uint8Array(buf));
+          } catch (e) {
+            console.log("caught : " +e);
+          }
+          //getNextSegment();
+        }
+        
+        ms.addEventListener("sourceopen", function(e) {
+          mediaobj = video.mozSrcObject;
+          vs = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+          vs.addEventListener("update", getNextSegment, false);
+          getNextSegment();
+        }, false);
+
+        video.src = URL.createObjectURL(ms);
+
+        [
+          "abort",
+          "canplay",
+          "canplaythrough",
+          "durationchange",
+          "emptied",
+          "ended",
+          "loadeddata",
+          "loadedmetadata",
+          "loadstart",
+          "pause",
+          "play",
+          "playing",
+          "progress",
+          "resize",
+          "seeked",
+          "seeking",
+          "stalled",
+          "suspend",
+          "timeupdate",
+          "volumechange",
+          "waiting",
+        ].forEach(
+          (eventName) => {
+            video.addEventListener(eventName, (event) => { log(event.type); }, false); 
+          });
+
+
+        video._prevReadyState = -1;
+        video._prevNetworkState = -1;
+        video._prevRange = [-1,0];
+        video._paused = true;
+        video.volume = 0.1;
+        setInterval(
+          function() {
+            if (video.readyState != video._prevReadyState) {
+              video._prevReadyState = video.readyState;
+              log("readyState: " + readyState[video.readyState]);
+            }
+            if (video.networkState != video._networkState) {
+              video._networkState = video.networkState;
+              log("networkState: " + networkState[video.networkState]);
+            }
+            if (video._paused != video.paused) {
+              log("paused: " + video.paused);
+              video._paused = video.paused;
+            }
+          }, 100);
+
+        // log("Calling play at loadstart");
+        // video.play().then((e)=> {
+        //   log("Play at load start promise resolved.");
+        // }, (e) => {
+        //   log("Play at load start promise rejected; " + e.message);
+        // });
+
+        once(video, "loadstart", () => {
+          video.play().then((e)=> {
+            log("Play upon loadstart promise resolved.");
+          }, (e) => {
+            log("Play upon loadstart promise rejected; " + e.message);
+          });
         });
 
-
-      video._prevReadyState = -1;
-      video._prevNetworkState = -1;
-      video._prevRange = [-1,0];
-      video._paused = true;
-      video.volume = 0.1;
-      setInterval(
-        function() {
-          if (video.readyState != video._prevReadyState) {
-            video._prevReadyState = video.readyState;
-            log("readyState: " + readyState[video.readyState]);
-          }
-          if (video.networkState != video._networkState) {
-            video._networkState = video.networkState;
-            log("networkState: " + networkState[video.networkState]);
-          }
-          if (video._paused != video.paused) {
-            log("paused: " + video.paused);
-            video._paused = video.paused;
-          }
-        }, 100);
-
-      log("Calling play at loadstart");
-      video.play().then((e)=> {
-        log("Play at load start promise resolved.");
-      }, (e) => {
-        log("Play at load start promise rejected; " + e.message);
-      });
-
+      }
 
     </script>
   </body>
